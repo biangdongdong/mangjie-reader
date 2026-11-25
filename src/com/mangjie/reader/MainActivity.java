@@ -2915,12 +2915,8 @@ public class MainActivity extends Activity {
         /** java.openUrl(url)：交给系统浏览器打开（登录、网页阅读这类） */
         public void openUrl(String url) {
             if (url == null || url.trim().isEmpty()) return;
-            try {
-                android.content.Intent it = new android.content.Intent(android.content.Intent.ACTION_VIEW,
-                        android.net.Uri.parse(url.trim()));
-                it.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
-                a.startActivity(it);
-            } catch (Throwable t) { a.toast("打不开这个链接"); }
+            // 统一走 openInBrowser：它负责补协议头、失败提示，别再各写一套 startActivity
+            if (!a.openInBrowser(url.trim())) a.toast("打不开这个链接");
         }
 
         public String base64Encode(String s) {
@@ -7763,7 +7759,7 @@ public class MainActivity extends Activity {
             return false;
         }
         String raw = bookSent.get(idx);
-        if (notReadable(raw)) { advanceSentence(); return true; }          // 纯标点：跳过，别让它念空
+        if (notReadable(raw)) { skipUnreadable(idx); advanceSentence(); return true; }   // 纯标点：跳过并说明
         String sp = com.mangjie.reader.reader.SpeakClean.clean(raw);
         String use = (sp != null && !sp.isEmpty()) ? sp : raw;
         if (com.mangjie.reader.speech.DianmingVoice.speakSentence(use, idx)) {
@@ -7887,8 +7883,9 @@ public class MainActivity extends Activity {
             rd.speak(chunks.get(i), i == 0 ? TextToSpeech.QUEUE_FLUSH : TextToSpeech.QUEUE_ADD, null, id);
         }
         // 句子出去了就挂看门狗：不管用的哪个引擎，不吭声都算它卡死
+        // 1.1.47：把引擎标签和实际倍速一起传进去，窗口按「引擎基准 + 字数 ÷ 倍速」折算
         if (rd != null) {
-            com.mangjie.reader.speech.TtsWatchdog.arm(text, new Runnable() {
+            com.mangjie.reader.speech.TtsWatchdog.arm(text, ttsTag(rd), rdRate, new Runnable() {
                 @Override public void run() { onTtsStall(); }
             });
         }
@@ -8067,6 +8064,26 @@ public class MainActivity extends Activity {
         return s == null || s.isEmpty() || NOT_READ.matcher(s).matches();
     }
 
+    /** 连续跳过的纯标点句数；念到可读句、或播报过一次之后归零 */
+    private int unreadableStreak = 0;
+
+    /**
+     * 纯标点句统一从这里跳过。
+     * 以前是直接 advanceSentence 走掉：日志没有、读屏没有、光标还停在上一句，
+     * 用户听到的是「跳过去了」，高亮和句号却对不上。现在三件事一起补：
+     * 记一条日志、把光标跟到被跳过的这一句、连续多句时合并播报一次。
+     */
+    private void skipUnreadable(int idx) {
+        unreadableStreak++;
+        devLogLine("朗读", "跳过第" + (idx + 1) + "句（纯标点）　连续 " + unreadableStreak + " 句");
+        moveCursorTo(idx);
+        if (unreadableStreak >= 3) {
+            // 逐句念「跳过」比不念还吵，连续三句以上才播报一次并归零
+            speak("已跳过 " + unreadableStreak + " 句空白");
+            unreadableStreak = 0;
+        }
+    }
+
     /**
      * 从 from 起一次排 AHEAD 句进引擎队列。
      * 首块 QUEUE_FLUSH 清掉旧队列，其余 QUEUE_ADD——引擎连续合成，句与句之间没有往返。
@@ -8105,7 +8122,7 @@ public class MainActivity extends Activity {
         int end = Math.min(bookSent.size(), from + (ttsOneAtATime ? 1 : AHEAD));
         for (int i = from; i < end; i++) {
             String raw = bookSent.get(i);
-            if (notReadable(raw)) continue;
+            if (notReadable(raw)) { devLogLine("朗读", "送批时跳过第" + (i + 1) + "句（纯标点）"); continue; }
             String sp = com.mangjie.reader.reader.SpeakClean.clean(raw);
             String use = (sp != null && !sp.isEmpty()) ? sp : raw;
             List<String> chunks = com.mangjie.reader.reader.SpeakCache.get(i, use);
@@ -8133,7 +8150,8 @@ public class MainActivity extends Activity {
         prewarmSentence(last + 1);
         // 看门狗必须在送句之前挂：引擎的开口回调比它晚到，才撤得掉，不会三秒后误判卡死
         if (rd == rdTts) {
-            com.mangjie.reader.speech.TtsWatchdog.arm(whole.toString(), new Runnable() {
+            com.mangjie.reader.speech.TtsWatchdog.arm(whole.toString(), batchEngTag,
+                    rdEffRate(), new Runnable() {
                 @Override public void run() { onTtsStall(); }
             });
         }
@@ -8155,7 +8173,8 @@ public class MainActivity extends Activity {
         if (i < bookSent.size()) moveCursorTo(i);
         if (i < batchLast) {
             // 队列里还有下一句，正常情况下马上就该出声；不出声同样按卡死处理
-            com.mangjie.reader.speech.TtsWatchdog.arm(bookSent.get(i + 1), new Runnable() {
+            com.mangjie.reader.speech.TtsWatchdog.arm(bookSent.get(i + 1), batchEngTag,
+                    rdEffRate(), new Runnable() {
                 @Override public void run() { onTtsStall(); }
             });
             // 关键：下一句的开口回调常常比这里早到（日志里只差 2ms）。arm 里会把「已开口」清掉，
@@ -14498,8 +14517,17 @@ public class MainActivity extends Activity {
     private boolean openInBrowser(String url) {
         // 不再用 resolveActivity 预判：Android 11+ 的包可见性下它对网页意图恒返回 null，
         // 明明有浏览器也会被判成「没找到」。直接发，真没人接再兜回来
+        if (url == null) return false;
+        String u = url.trim();
+        if (u.isEmpty()) return false;
+        // 书源里的地址常省掉协议头（www.xx.com/...）。没有 scheme 的 Uri 谁都接不住，
+        // ACTION_VIEW 只会抛 ActivityNotFoundException，看起来就是「点进去打不开」
+        if (!u.contains("://") && !u.startsWith("mailto:") && !u.startsWith("tel:") && !u.startsWith("content:")) {
+            u = u.startsWith("//") ? ("https:" + u) : ("https://" + u);
+            devLogLine("订阅", "地址缺协议头，补成 " + u);
+        }
         try {
-            Intent i = new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url));
+            Intent i = new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(u));
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(i);
             return true;
@@ -14597,7 +14625,8 @@ public class MainActivity extends Activity {
             healTries = 0;                        // 有进展，自愈计数归零
         }
         @Override public void onDone(String id) {
-            if (isReaderId(id)) com.mangjie.reader.speech.TtsWatchdog.disarm();
+            // 1.1.47：先记收尾位，再撤表。收尾位留着，到点也不会再判死
+            if (isReaderId(id)) com.mangjie.reader.speech.TtsWatchdog.markDone();
             if ("rd".equals(id)) {
                 ttsStallRetried = false;      // 正常读完了，下次再卡死还给它一次重建机会
                 ttsStallCount = 0;            // 一次真的读通，卡死计数归零
@@ -14653,6 +14682,8 @@ public class MainActivity extends Activity {
         }
         @Override public void onError(String id) {
             devLogLine("语音", "朗读出错 id=" + id);
+            // 1.1.47：记一下错误位，别让同一轮再被判死一次
+            if (isReaderId(id)) com.mangjie.reader.speech.TtsWatchdog.markError();
             if ("rd".equals(id) || "rdmid".equals(id)) {
                 com.mangjie.reader.speech.TtsWatchdog.disarm();
                 ui.postDelayed(new Runnable() { @Override public void run() { advanceSentence(); } }, 800);
