@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  内置离线引擎的能力声明：只声明一个中文女声，供系统「语音引擎 → 发音人」列出。
+  注意：属性故意不带 android: 前缀。framework 里这几个属性（locale/quality/latency/
+  requiresNetwork）要么不存在、要么被标成 private，aapt2 会直接拒绝编译；
+  而 TextToSpeechService 的解析器是按属性名读取的，无前缀一样能读到。
+-->
+<tts-engine>
+    <voice
+        name="zh-cn-mangjie-matcha"
+        locale="zho_CHN"
+        quality="400"
+        latency="300"
+        requiresNetwork="false" />
+</tts-engine>

@@ -1,0 +1,47 @@
+盲界阅读（com.mangjie.reader）来源与许可
+========================================
+
+一、上游与许可
+
+本项目借鉴并部分等价复现了「开源阅读 Legado」（https://github.com/gedoor/legado）的实现。
+Legado 以 GNU General Public License v3.0 发布。
+
+本项目整体同样以 GNU General Public License v3.0 授权发布。你可以自由使用、修改、再分发，
+但再分发时必须做到三件事：
+
+  1. 保留本说明与许可声明；
+  2. 以同一许可（GPL-3.0）授权，不得附加更严格的条款；
+  3. 向接收者提供完整的对应源码——与本 APK 放在同一处的
+     「盲界阅读-源码-<版本>.zip」即为对应源码，包含全部 Java 源码、清单、资源、
+     构建脚本与依赖 jar，可直接编译出同一版本。
+
+二、涉及的上游实现（按文件列）
+
+  net/RuleEngine.java          规则引擎，与 Legado AnalyzeRule 同构
+  net/Http.java                请求、重试与超时
+  net/JsSource.java            JS 书源执行（Rhino）
+  net/UrlResolver.java         URL 拼接与相对化
+  net/SourceChecker.java       书源可用性校验
+  net/ChapterCache.java        章节缓存
+  net/NetBookController.java   网文阅读控制与换章衔接
+  net/BookSourceOps.java       书源导入导出
+  reader/HtmlFormat.java       正文 HTML 转纯文本
+  reader/TextUtil.java         文本与体量工具
+  reader/EncodingDetect.java   编码探测（UTF-8 / UTF-16 / GB18030 / Big5）
+  reader/TocRules.java         目录规则
+  reader/ChapterIndex.java     章节索引
+  reader/BookFinder.java       搜书聚合
+  reader/BookProgress.java     阅读进度存取
+  reader/BackupFlow.java       备份与恢复
+  speech/SilentWarmup.java     音道预热，Legado MediaHelp.playSilentSound 的等价实现
+  MainActivity.java            朗读链路若干处（队列策略、onError 处理）参照 Legado ReadAloudService
+
+三、免责
+
+本软件为个人学习项目，不提供任何担保。书源与书籍内容来自第三方网站，与本项目无关，
+本项目不存储、不分发任何书籍内容。
+
+四、源码获取
+
+  同目录：盲界阅读-源码-<版本>.zip
+  或联系作者。

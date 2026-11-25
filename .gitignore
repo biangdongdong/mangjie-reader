@@ -1,0 +1,12 @@
+build/
+dist/
+_backup/
+_test/
+history/
+*.apk
+*.idsig
+*.jks
+*.keystore
+*.p12
+能力测试*
+libs-jni/

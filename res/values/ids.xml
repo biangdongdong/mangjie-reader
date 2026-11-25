@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 正文页的自定义无障碍动作 id：读屏开着时触摸全交给读屏，长按和滑动手势都进不来，
+         只能靠无障碍动作（读屏「操作」里选一下再双击）来呼出阅读菜单 -->
+    <item name="act_reader_menu" type="id" />
+    <item name="act_reader_prev" type="id" />
+    <item name="act_reader_next" type="id" />
+</resources>
