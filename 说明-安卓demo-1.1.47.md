@@ -101,3 +101,8 @@ if (notReadable(raw)) { advanceSentence(); return true; }   // 纯标点：跳�
 - 18 个参照 Legado 的源文件统一加文件头声明（来源地址、上游版权、许可与修改说明指的落点）。
 - `LICENSE` 原为 GPL-3.0 全文，未改动。
 
+后续（2026-11-27）：上游仓库地址由个人仓库 `gedoor/legado` 更新为团队组织
+`https://github.com/LegadoTeam/legado`，21 处地址注释（17 个源文件头 + NOTICE + README + 来源与许可）
+与 `核对-规则语法语义-1.0.99.md` 的补注已同步；版权人 `gedoor` 按 GPL 规则保留未改。
+本轮只改注释与文档、未重编译，故 APK 仍是上面那个 md5（1,361,333 字节），下个版本重出包时自然对齐。
+

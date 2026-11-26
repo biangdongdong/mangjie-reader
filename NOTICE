@@ -15,7 +15,8 @@
   本项目借鉴并部分等价复现了「开源阅读 Legado」的实现：
 
     Legado（开源阅读）
-    https://github.com/gedoor/legado
+    https://github.com/LegadoTeam/legado
+    （原个人仓库 https://github.com/gedoor/legado 已迁入该组织仓库，两者为同一项目）
     Copyright (C) 2019-2023 gedoor
     许可：GNU General Public License v3.0
 

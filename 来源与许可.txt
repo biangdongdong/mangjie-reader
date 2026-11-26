@@ -3,8 +3,9 @@
 
 一、上游与许可
 
-本项目借鉴并部分等价复现了「开源阅读 Legado」（https://github.com/gedoor/legado）的实现。
-Legado 以 GNU General Public License v3.0 发布。
+本项目借鉴并部分等价复现了「开源阅读 Legado」（https://github.com/LegadoTeam/legado）的实现。
+该地址由原个人仓库 https://github.com/gedoor/legado 迁入，属同一项目；版权人仍为 gedoor，
+上游以 GNU General Public License v3.0 发布。
 
 本项目整体同样以 GNU General Public License v3.0 授权发布。你可以自由使用、修改、再分发，
 但再分发时必须做到三件事：

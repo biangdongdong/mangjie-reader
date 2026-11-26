@@ -68,8 +68,10 @@ src/com/mangjie/reader/
 
 本项目以 **GNU General Public License v3.0** 授权，见 `LICENSE`。
 
-本项目借鉴并部分等价复现了「开源阅读 Legado」（<https://github.com/gedoor/legado>，
-Copyright (C) 2019-2023 gedoor，GPL-3.0）。上游与本项目的版权声明、对上游的使用方式与修改说明、
+本项目借鉴并部分等价复现了「开源阅读 Legado」（<https://github.com/LegadoTeam/legado>，
+Copyright (C) 2019-2023 gedoor，GPL-3.0）。该地址由原个人仓库
+<https://github.com/gedoor/legado> 迁入，两者为同一项目，版权人未变。
+上游与本项目的版权声明、对上游的使用方式与修改说明、
 第三方组件许可，全部见 `NOTICE`；涉及上游的逐文件清单见 `来源与许可.txt`。
 被参照的源文件在文件头保留了来源注释。
 

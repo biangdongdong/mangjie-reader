@@ -1,5 +1,5 @@
 /*
- * 本文件的部分实现参照「开源阅读 Legado」（https://github.com/gedoor/legado）。
+ * 本文件的部分实现参照「开源阅读 Legado」（https://github.com/LegadoTeam/legado）。
  * Legado：Copyright (C) 2019-2023 gedoor，GNU General Public License v3.0。
  * 本工程对其的使用方式与修改说明见仓库根目录 NOTICE，完整条款见 LICENSE。
  */
