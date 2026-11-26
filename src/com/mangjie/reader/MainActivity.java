@@ -5008,11 +5008,100 @@ public class MainActivity extends Activity {
         items.add(new Item("名称  盲界阅读"));
         items.add(new Item("版本  v" + appVersion(), "about:ver"));
         items.add(new Item("版权  © 盲界软件"));
+        items.add(new Item("免责声明", "go:disclaimer"));
+        items.add(new Item("开源许可", "go:license"));
         items.add(new Item("更新日志", "go:changelog"));
         items.add(new Item("系统信息", "go:sysinfo"));
         items.add(new Item("软件升级", "go:update"));
         if (devMode) items.add(new Item("开发者", "go:dev"));
         return new Screen("关于", items).k("about");
+    }
+
+    // ================================================================ 免责声明与开源许可
+    /**
+     * GPL-3.0 第 5 条要求分发时随附许可证副本，所以全文放 res/raw（不能走 assets：
+     * 普通版 build.sh 不带 -A，只有语音版带），离线也能查。全文按段落拆成条目，
+     * 不做成一条长文本——读屏会把整篇读成一整块，没法定位、没法跳段。
+     */
+    private static final String REPO_URL = "https://github.com/biangdongdong/mangjie-reader";
+
+    private static final String[] DISCLAIMER = {
+            "本软件是个人自用的学习作品，源码按 GPL-3.0 公开在 GitHub。",
+            "软件本身不提供、不存储、不分发任何书籍内容。",
+            "能读到什么，取决于你自行导入的书源或订阅源，与软件作者无关。",
+            "书源多来自网络第三方，内容是否准确、是否合法，由来源方负责。",
+            "请只用来阅读你合法拥有或有权访问的内容；因第三方书源产生的版权问题由使用者承担。",
+            "不收集阅读记录、书源、账号信息，数据全部保存在本机。",
+            "软件按现状提供，不承诺无错误，也不承担数据丢失等间接损失。",
+            "请勿用于商业用途或再分发安装包。"
+    };
+
+    /** 读 res/raw 下的纯文本，读不到返回空串 */
+    private String rawText(String name) {
+        try {
+            int id = getResources().getIdentifier(name, "raw", getPackageName());
+            if (id == 0) return "";
+            java.io.InputStream in = getResources().openRawResource(id);
+            java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[4096];
+            int n;
+            while ((n = in.read(buf)) > 0) bo.write(buf, 0, n);
+            in.close();
+            return new String(bo.toByteArray(), "UTF-8");
+        } catch (Throwable e) {
+            devLogLine("许可", "读 res/raw/" + name + " 失败：" + e.getMessage());
+            return "";
+        }
+    }
+
+    private Screen disclaimerScreen() {
+        List<Item> items = new ArrayList<>();
+        items.add(new Item("使用前请读下面八条，每条可单独聚焦，上下键移动。"));
+        for (int i = 0; i < DISCLAIMER.length; i++) {
+            items.add(new Item((i + 1) + "、" + DISCLAIMER[i]));
+        }
+        return new Screen("免责声明", items).k("disclaimer");
+    }
+
+    private Screen licenseScreen() {
+        List<Item> items = new ArrayList<>();
+        items.add(new Item("本项目"));
+        items.add(new Item("许可证　GNU 通用公共许可证第三版，GPL-3.0。"));
+        items.add(new Item("源码仓库　" + REPO_URL));
+        items.add(new Item("上游：开源阅读 Legado"));
+        items.add(new Item("许可证　GPL-3.0。"));
+        items.add(new Item("版权　© 2019-2023 gedoor。"));
+        items.add(new Item("地址　https://github.com/LegadoTeam/legado"));
+        items.add(new Item("使用方式　目录规则表按原文等价复现；规则引擎依据上游语义实现，部分代码直接参照。对上游文件的修改说明写在 NOTICE 里。"));
+        items.add(new Item("第三方组件"));
+        items.add(new Item("jsoup　MIT 许可　HTML 解析。"));
+        items.add(new Item("Mozilla Rhino　MPL-2.0 许可　书源脚本执行。"));
+        items.add(new Item("sherpa-onnx　Apache-2.0 许可　本地语音合成。"));
+        items.add(new Item("ONNX Runtime　MIT 许可　推理运行时。"));
+        items.add(new Item("AOSP TalkBack 手势代码　Apache-2.0 许可　二十二个文件，源文件头保留原始版权。"));
+        items.add(new Item("查看 GPL-3.0 许可证全文", "go:legal:license"));
+        items.add(new Item("查看 NOTICE 全文", "go:legal:notice"));
+        return new Screen("开源许可", items).k("license");
+    }
+
+    /** 全文页：按空行切段，一段一条，列表可滚动，读屏逐段读 */
+    private Screen legalScreen(String name) {
+        List<Item> items = new ArrayList<>();
+        String title = "license".equals(name) ? "GPL-3.0 许可证全文" : "NOTICE 全文";
+        String text = rawText(name);
+        String[] paras = text.replace("\r\n", "\n").replace("\r", "\n").split("\n\\s*\n");
+        int count = 0;
+        for (String p : paras) if (!p.trim().isEmpty()) count++;
+        if (count == 0) {
+            items.add(new Item("内置文本读不出来，请到仓库查看：" + REPO_URL));
+            return new Screen(title, items).k("legal");
+        }
+        items.add(new Item("共 " + count + " 段，上下键逐段读，上一级用返回键。"));
+        for (String p : paras) {
+            String t = p.replace("\t", "    ").trim();
+            if (!t.isEmpty()) items.add(new Item(t));
+        }
+        return new Screen(title, items).k("legal");
     }
 
 
@@ -13320,6 +13409,9 @@ public class MainActivity extends Activity {
         if ("dev:clear".equals(k)) { clearLog(); return true; }
         if (k.startsWith("dev:")) { handleDevToggle(); return true; }
         if (k.startsWith("sp:")) { handleSpeech(k.substring(3)); return true; }
+        if ("go:disclaimer".equals(k)) { pushScreen(disclaimerScreen()); return true; }
+        if ("go:license".equals(k)) { pushScreen(licenseScreen()); return true; }
+        if (k.startsWith("go:legal:")) { pushScreen(legalScreen(k.substring(9))); return true; }
         if ("go:changelog".equals(k)) { pushScreen(changelogScreen()); return true; }
         if ("chg:refresh".equals(k)) { upd.fetchChangelog(true); return true; }
         if (k.startsWith("chg:")) {
