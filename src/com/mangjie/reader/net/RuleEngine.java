@@ -261,15 +261,26 @@ public final class RuleEngine {
             int idx = b.indexOf("@get:");
             if (idx < 0) break;
             int st = idx + 5;
-            int en = st;
-            while (en < b.length()) {
-                char c = b.charAt(en);
-                if (Character.isLetterOrDigit(c) || c == '_' || c == '-' || c == '.') en++;
-                else break;
+            String key;
+            int endPos;
+            // 对齐 Legado evalPattern 的 `@get:\{[^}]+?\}` 写法：@get:{key} 与 @get:key 等价
+            if (st < b.length() && b.charAt(st) == '{') {
+                int close = b.indexOf('}', st + 1);
+                if (close < 0) break;
+                key = b.substring(st + 1, close).trim();
+                endPos = close + 1;
+            } else {
+                int en = st;
+                while (en < b.length()) {
+                    char c = b.charAt(en);
+                    if (Character.isLetterOrDigit(c) || c == '_' || c == '-' || c == '.') en++;
+                    else break;
+                }
+                key = b.substring(st, en);
+                endPos = en;
             }
-            String key = b.substring(st, en);
             String v = ruleVars.containsKey(key) ? ruleVars.get(key) : "";
-            b = b.substring(0, idx) + v + b.substring(en);
+            b = b.substring(0, idx) + v + b.substring(endPos);
         }
         return b;
     }
@@ -340,6 +351,73 @@ public final class RuleEngine {
         return count == 0 ? java.util.Collections.<String[]>emptyList() : list;
     }
 
+    private static final java.util.regex.Pattern REGEX_GROUP = java.util.regex.Pattern.compile("\\$[0-9]{1,2}");
+
+    /**
+     * 对齐 Legado 的正则规则模式（AnalyzeByRegex）：规则文本里出现 $1…$99 时，
+     * 整条规则不再当 CSS/XPath 选择器，而是按 && 拆成多段正则逐层过滤，
+     * 最后一段返回 group(0..groupCount)。上游 getElement/getElements 走这条通路，
+     * 用正则写目录或正文的源全靠它，缺了就是整段取空。
+     */
+    private boolean looksRegexChain(String body) {
+        if (body == null) return false;
+        String b = body.trim();
+        if (b.isEmpty()) return false;
+        if (b.startsWith("@") || b.startsWith("//") || b.startsWith("/")) return false;
+        if (b.startsWith("$.") || b.startsWith("$[")) return false;
+        if (b.contains("<js>") || b.contains("{{")) return false;
+        // 选择器里不可能出现的几种形态：捕获组前后文、字符类取反、跨行通配、$n 组引用
+        return REGEX_GROUP.matcher(b).find()
+                || b.contains("[\\s\\S]") || b.contains("([^") || b.contains(".*?")
+                || b.contains("</") || b.contains("[^>");
+    }
+
+    public List<String> regexChain(String rule, String html) {
+        List<String> out = new ArrayList<>();
+        if (rule == null || html == null) return out;
+        List<String> regs = splitTop(rule.trim(), "&&");
+        String cur = html;
+        for (int i = 0; i < regs.size(); i++) {
+            String reg = regs.get(i).trim();
+            if (reg.isEmpty()) continue;
+            java.util.regex.Pattern p;
+            try {
+                // 与上游一致：不传 DOTALL，要跨行就自己写 [\s\S]
+                p = java.util.regex.Pattern.compile(reg);
+            } catch (Exception e) {
+                noteRuleFail(rule, e);
+                return out;
+            }
+            java.util.regex.Matcher m = p.matcher(cur);
+            if (i == regs.size() - 1) {
+                while (m.find()) {
+                    int gc = m.groupCount();
+                    /*
+                     * 跳过 group(0)（整段匹配）：写正则规则的人要的是捕获组。
+                     * 上游 getElement 把 group0 放在下标 0、$1 取第一个捕获组，
+                     * 我们这里不给下标体系，直接以 group1 起作为结果，等价于默认取 $1。
+                     * 整条正则没有捕获组时才退回 group0。
+                     */
+                    if (gc == 0) {
+                        String v = m.group();
+                        out.add(v == null ? "" : v);
+                    } else {
+                        for (int g = 1; g <= gc; g++) {
+                            String v = m.group(g);
+                            out.add(v == null ? "" : v);
+                        }
+                    }
+                }
+                return out;
+            }
+            StringBuilder sb = new StringBuilder();
+            while (m.find()) sb.append(m.group());
+            if (sb.length() == 0) return out;   // 这一层没命中，整条链断
+            cur = sb.toString();
+        }
+        return out;
+    }
+
     public List<String> ruleSimple(String rule, String base, String html) {
         List<String> out = new ArrayList<>();
         String body = applyGet(stripPut(rule));
@@ -390,6 +468,10 @@ public final class RuleEngine {
             int h2 = replacePattern.indexOf("##");
             if (h2 >= 0) { replaceWith = replacePattern.substring(h2 + 2); replacePattern = replacePattern.substring(0, h2); }
         }
+        if (looksRegexChain(body)) {
+            // 正则规则模式：$1 触发，与选择器互斥，命中就不进 jsoup
+            out.addAll(regexChain(body, html));
+        } else {
         try {
             // 对齐 Legado 的 JS_PATTERN：选择器后面跟 @js: 时，先按选择器取到结果，
             // 再把结果当 result 交给 JS（书源里 class.intro@js:result.replace(...) 都是这个写法）
@@ -474,6 +556,7 @@ public final class RuleEngine {
             }
         } catch (Throwable e) {
             noteRuleFail(rule, e);
+        }
         }
         if (replacePattern != null && !out.isEmpty()) {
             List<String> rep = new ArrayList<>();
