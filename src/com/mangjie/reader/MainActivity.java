@@ -13409,9 +13409,6 @@ public class MainActivity extends Activity {
         if ("dev:clear".equals(k)) { clearLog(); return true; }
         if (k.startsWith("dev:")) { handleDevToggle(); return true; }
         if (k.startsWith("sp:")) { handleSpeech(k.substring(3)); return true; }
-        if ("go:disclaimer".equals(k)) { pushScreen(disclaimerScreen()); return true; }
-        if ("go:license".equals(k)) { pushScreen(licenseScreen()); return true; }
-        if (k.startsWith("go:legal:")) { pushScreen(legalScreen(k.substring(9))); return true; }
         if ("go:changelog".equals(k)) { pushScreen(changelogScreen()); return true; }
         if ("chg:refresh".equals(k)) { upd.fetchChangelog(true); return true; }
         if (k.startsWith("chg:")) {
@@ -14174,6 +14171,14 @@ public class MainActivity extends Activity {
 
         if ("booksrc".equals(what)) { pushScreen(bookSourceScreen()); return; }
         if ("subsrc".equals(what)) { pushScreen(ops.subSourceScreen()); return; }
+        /*
+         * 关于页那两项的 key 是 go:disclaimer / go:license / go:legal:xxx，
+         * actK 里 `k.startsWith("go:")` 会先把前缀剥掉转给本函数，所以这里比对的是无前缀的 what。
+         * 以前把这三条加在 actSettings 里（那里的 k 带 go: 前缀），永远走不到 —— 点了没反应。
+         */
+        if ("disclaimer".equals(what)) { stack.add(disclaimerScreen()); render(true); return; }
+        if ("license".equals(what)) { stack.add(licenseScreen()); render(true); return; }
+        if (what.startsWith("legal:")) { stack.add(legalScreen(what.substring(6))); render(true); return; }
         if ("changelog".equals(what)) {
             stack.add(changelogScreen());
             render(true);
