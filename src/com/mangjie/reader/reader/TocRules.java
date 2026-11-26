@@ -28,6 +28,8 @@ public final class TocRules {
     private static final String TAG = "TocRules";
     /** 两条匹配之间正文不足这么多字，判为卷而不是章 */
     private static final int VOLUME_GAP = 100;
+    /** 两条匹配之间正文超过这么多字才算新的一章；100～1000 之间两边都不计（Legado 的界） */
+    private static final int CHAP_MAX_GAP = 1000;
     /** 后面的规则要领先当前最好这么多章才替换 */
     private static final int OVER_RULE_COUNT = 2;
     /** 章数超过这个数就直接收工 */
@@ -130,20 +132,19 @@ public final class TocRules {
         int maxNum = -1;
         for (Rule r : RULES) {
             int csNum = 0, numE = 0;
-            int lastEnd = 0;
-            boolean first = true;
+            int start = 0;
             java.util.regex.Matcher m = r.pattern.matcher(text);
             while (m.find()) {
-                int gap = m.start() - lastEnd;
-                if (first) {
+                int gap = m.start() - start;
+                if (start == 0 || gap > CHAP_MAX_GAP) {
+                    // 第一处匹配，或与上一个认定的章相隔够远：才算一章
                     csNum++;
-                    first = false;
+                    start = m.end();
                 } else if (gap < VOLUME_GAP) {
+                    // 紧挨着的大概率是卷，或被规则误当成标题的正文
                     numE++;
-                } else {
-                    csNum++;
                 }
-                lastEnd = m.end();
+                // gap 落在 [100, 1000] 之间：两边都不计，start 也不推进
             }
             // 有效章数不到卷噪声三倍的规则视为误判
             if (csNum >= numE * 3 && csNum > maxNum + OVER_RULE_COUNT) {

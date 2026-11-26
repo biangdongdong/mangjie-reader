@@ -70,6 +70,10 @@ public final class UrlResolver {
         public String bodyJs = "";
         public String dnsIp = "";
         public int retry = 0;
+        /** options 里的 timeout（毫秒）；0 表示源里没写 */
+        public int timeout = 0;
+        /** options 里的 followRedirects，缺省跟随（对齐 Legado） */
+        public boolean followRedirects = true;
         public boolean webView = false;
         /** 有没有切到 options、有没有跑过 js，给日志用 */
         public boolean hasOptions = false;
@@ -254,6 +258,8 @@ public final class UrlResolver {
         Object b = o.get("body");
         if (b != null) out.body = b instanceof String ? (String) b : strOf(b);
         out.retry = toInt(o.get("retry"), 0);
+        out.timeout = toInt(o.get("timeout"), 0);
+        if (o.containsKey("followRedirects")) out.followRedirects = truthy(o.get("followRedirects"));
         out.webJs = optStr(o, "webJs");
         out.bodyJs = optStr(o, "bodyJs");
         out.dnsIp = optStr(o, "dnsIp");

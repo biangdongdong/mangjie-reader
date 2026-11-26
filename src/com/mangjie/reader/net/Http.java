@@ -83,6 +83,8 @@ public final class Http {
         public int code = 0;
         public String url = "";
         public String err = "";
+        /** 3xx 时响应头里的 Location（源里写 followRedirects:false 时有意义） */
+        public String location = "";
         public long ms = 0;
         public boolean ok() { return code >= 200 && code < 300 && body != null; }
     }
@@ -125,10 +127,13 @@ public final class Http {
         attempt++;
         try {
             java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
-            c.setConnectTimeout(timeoutMs > 0 ? timeoutMs : 15000);
+            // 源里写了 timeout 就按源里来（夹在 1～60 秒，免得一个坏源把线程卡死）
+            int effMs = timeoutMs > 0 ? timeoutMs
+                    : (ro.timeout > 0 ? Math.max(1000, Math.min(ro.timeout, 60000)) : 0);
+            c.setConnectTimeout(effMs > 0 ? effMs : 15000);
             // 读超时不再翻倍：以前传 30 秒实际会等 60 秒，搜索里一个坏源就卡住两个线程位
-            c.setReadTimeout(timeoutMs > 0 ? timeoutMs : 25000);
-            c.setInstanceFollowRedirects(true);
+            c.setReadTimeout(effMs > 0 ? effMs : 25000);
+            c.setInstanceFollowRedirects(ro.followRedirects);
             c.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36");
             c.setRequestProperty("Accept", "text/html,application/json,*/*");
             // 第二次尝试补同站 Referer：不少站点的 403 只是缺这个头，源里又没写
@@ -196,7 +201,8 @@ public final class Http {
             out.code = code;
             if (code >= 300 && code < 400) {
                 String loc = c.getHeaderField("Location");
-                if (loc != null) {
+                out.location = loc == null ? "" : loc;
+                if (loc != null && ro.followRedirects) {
                     Resp rr = fetch(loc.startsWith("http") ? loc : new java.net.URL(new java.net.URL(url), loc).toString(), base, timeoutMs);
                     rr.ms = System.currentTimeMillis() - t0;
                     return rr;

@@ -1687,12 +1687,11 @@ public final class NetBookController {
         return v.trim();
     }
 
-    /** 简介清洗：对齐 Legado 的 HtmlFormatter，去标签、压空白、去空行 */
+    /** 简介清洗：对齐 Legado 的 formatIntro，去实体与标签、压空行，但不加段首缩进 */
     private static String cleanIntro(String v) {
         if (v == null) return "";
         String t = PuaText.fix(v);
-        if (t.contains("<")) t = org.jsoup.Jsoup.parse(t).text();
-        t = t.replace('\u3000', ' ').replaceAll("[ \\t]+", " ").replaceAll("\\n{2,}", "\n");
+        t = com.mangjie.reader.reader.HtmlFormat.formatIntro(t);
         return t.trim();
     }
 
