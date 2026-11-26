@@ -1,0 +1,66 @@
+盲界阅读（com.mangjie.reader）版权与来源声明
+==================================================
+
+一、本程序
+
+  名称：盲界阅读（mangjie-reader）
+  版权：Copyright (C) 2026 biangdongdong
+  许可：GNU General Public License v3.0（全文见仓库根目录 LICENSE）
+
+  本程序为自由软件：你可以再分发和／或修改它，但须遵守 GPL-3.0 的条款。
+  本程序不提供任何担保，包括适销性与特定用途适用性的担保。
+
+二、上游
+
+  本项目借鉴并部分等价复现了「开源阅读 Legado」的实现：
+
+    Legado（开源阅读）
+    https://github.com/gedoor/legado
+    Copyright (C) 2019-2023 gedoor
+    许可：GNU General Public License v3.0
+
+  上游同样以 GPL-3.0 发布，本项目以同一许可授权，未附加任何更严格的条款。
+
+三、对上游的使用方式与修改说明
+
+  本项目不是 Legado 的分支或移植，而是一个独立的安卓阅读器（单 Activity、View 体系、纯 Java，
+  不用 Compose、不依赖 Gradle 插件），面向视障用户。对 Legado 的使用分两类：
+
+  （一）等价复现：按其公开实现重新写一遍语义相同的逻辑，代码为本工程自有，
+        例如规则引擎（AnalyzeRule 的语法与求值语义）、URL 拼接与相对化、目录规则解析、
+        编码探测、正文 HTML 转纯文本。
+
+  （二）直接参照实现：在结构、队列策略或边界处理上照其做法改写，
+        例如正文朗读的队列与 onError 处理（参照 ReadAloudService）、
+        音道预热（参照 MediaHelp.playSilentSound）。
+
+  逐文件清单见同目录 `来源与许可.txt`。被参照的文件在文件头保留了来源说明注释。
+
+  本工程对上游实现的修改自项目 1.0.x 起持续进行，1.1.47 起在本仓库公开。
+  「修改」的含义限于上述文件范围内的实现改动与适配（安卓无障碍、读屏协同、键盘机交互、
+  点明通道接入等），不涉及对 Legado 商标或作者名义的使用。
+
+四、第三方组件（随源码一起分发）
+
+  组件                    许可              用途
+  jsoup                   MIT               HTML 解析（libs/jsoup.jar）
+  Mozilla Rhino           MPL-2.0           JS 书源执行（libs/rhino.jar）
+  sherpa-onnx             Apache-2.0        本地语音合成 JNI（libs-jni/arm64-v8a）
+  ONNX Runtime            MIT               推理运行时（libs-jni/arm64-v8a）
+
+  以上许可均与 GPL-3.0 兼容。再分发时请保留各组件自带的版权与许可声明。
+
+五、对应源码
+
+  GPL-3.0 意义上的「对应源码」即本仓库：
+
+    https://github.com/biangdongdong/mangjie-reader
+
+  仓库内含全部 Java 源码、AndroidManifest、资源、构建脚本（build.sh）、
+  依赖 jar 与 JNI 库，可按 README 的构建步骤编译出同一版本。
+  发布版本另有源码包：`盲界阅读-源码-<版本>.zip`，与本仓库同一内容。
+
+六、免责
+
+  本软件为个人学习项目，不提供任何担保。书源与书籍内容来自第三方网站，与本项目无关，
+  本项目不存储、不分发任何书籍内容。

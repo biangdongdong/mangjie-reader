@@ -43,5 +43,13 @@ Legado 以 GNU General Public License v3.0 发布。
 
 四、源码获取
 
-  同目录：盲界阅读-源码-<版本>.zip
-  或联系作者。
+  公开仓库（GPL-3.0 意义上的「对应源码」）：
+    https://github.com/biangdongdong/mangjie-reader
+    git clone https://github.com/biangdongdong/mangjie-reader.git
+
+  仓库内含全部 Java 源码、清单、资源、构建脚本 build.sh、依赖 jar 与 JNI 库，
+  按 README 的构建步骤可编译出同一版本。发布版本另有源码包「盲界阅读-源码-<版本>.zip」，
+  与本仓库内容一致。
+
+  完整的版权与上游声明见仓库根目录 NOTICE；许可条款见 LICENSE。
+
