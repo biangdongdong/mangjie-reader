@@ -2311,6 +2311,8 @@ public class MainActivity extends Activity {
             return items;
         }
         if ("setData".equals(k)) {
+            items.add(new Item("后台保活设置", "go:keepalive"));
+            items.add(new Item("忽略电池优化", "go:batteryexempt"));
             items.add(new Item("备份与恢复", "go:backup"));
             items.add(new Item("清空订阅缓存", "go:subcacheclear"));
             items.add(new Item("改搜索线程数", "src:threads"));
@@ -5102,6 +5104,48 @@ public class MainActivity extends Activity {
             if (!t.isEmpty()) items.add(new Item(t));
         }
         return new Screen(title, items).k("legal");
+    }
+
+    // ================================================================ 后台保活
+    /**
+     * 日志证据（a11y-25102RKBEC，2026-11-27 08:51）：退后台约 15 秒后进程被冻住，
+     * 看门狗没跑、onDone 没回、进程也没被杀。冻结在调度层，与 wakelock、前台服务都无关，
+     * 国产 ROM 只认「省电策略无限制 + 自启动 + 电池优化豁免」。这一页就是把这三件事讲明白。
+     */
+    private Screen keepAliveScreen() {
+        List<Item> items = new ArrayList<>();
+        items.add(new Item("后台朗读被掐断，通常是系统把进程冻住了，不是软件判死。按下面四条做。"));
+        items.add(new Item("一、申请电池优化豁免，系统弹框里点允许。", "go:batteryexempt"));
+        items.add(new Item("二、系统设置，应用，盲界阅读，省电策略改成「无限制」。"));
+        items.add(new Item("三、同一页里打开「自启动」，允许它自己起来。"));
+        items.add(new Item("四、下拉通知栏长按「朗读控制」，把通知锁定，别让系统随界面清掉。"));
+        items.add(new Item("做完回前台念一段，再退后台十几秒，还能听见接着念就说明生效。"));
+        return new Screen("后台保活", items).k("keepalive");
+    }
+
+    /** 申请电池优化豁免；机型不支持时给出可读屏的替代提示 */
+    private void requestBatteryExempt() {
+        try {
+            if (Build.VERSION.SDK_INT >= 23) {
+                android.os.PowerManager pm = (android.os.PowerManager) getSystemService(POWER_SERVICE);
+                if (pm != null && pm.isIgnoringBatteryOptimizations(getPackageName())) {
+                    devLogLine("后台", "已在电池优化豁免名单内");
+                    speak("已经在豁免名单里，不用再设");
+                    return;
+                }
+                android.content.Intent i = new android.content.Intent(
+                        android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                i.setData(android.net.Uri.parse("package:" + getPackageName()));
+                startActivity(i);
+                devLogLine("后台", "已发起电池优化豁免申请");
+                speak("系统会弹一个框，请点允许");
+            } else {
+                speak("这个系统版本不需要单独设电池优化");
+            }
+        } catch (Throwable e) {
+            devLogLine("后台", "豁免申请失败：" + e.getMessage());
+            speak("这台机器不支持直接申请，请在系统设置里把本应用设为无限制");
+        }
     }
 
 
@@ -14179,6 +14223,8 @@ public class MainActivity extends Activity {
         if ("disclaimer".equals(what)) { stack.add(disclaimerScreen()); render(true); return; }
         if ("license".equals(what)) { stack.add(licenseScreen()); render(true); return; }
         if (what.startsWith("legal:")) { stack.add(legalScreen(what.substring(6))); render(true); return; }
+        if ("keepalive".equals(what)) { stack.add(keepAliveScreen()); render(true); return; }
+        if ("batteryexempt".equals(what)) { requestBatteryExempt(); return; }
         if ("changelog".equals(what)) {
             stack.add(changelogScreen());
             render(true);

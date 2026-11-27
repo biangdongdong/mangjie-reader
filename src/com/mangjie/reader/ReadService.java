@@ -76,7 +76,23 @@ public class ReadService extends Service {
             if (ctl != null) ctl.onReadCmd(cmd);
             updateNotification(cmd);
         }
-        return START_NOT_STICKY;
+        /*
+         * 1.1.50：从 NOT_STICKY 改成 STICKY。
+         * 原来进程被杀后服务不重建，朗读就这么没了；现在系统会带着 null intent 把它拉回来，
+         * 朗读还在不在由重建后的补续读决定（MainActivity 启动时会判断）。
+         */
+        return START_STICKY;
+    }
+
+    /**
+     * 从最近任务划掉时不再停服务：朗读正在跑，划掉界面不等于要停止听书。
+     * 真正的停止由通知栏的「停止」按钮或界面里的暂停负责。
+     */
+    @Override public void onTaskRemoved(Intent rootIntent) {
+        super.onTaskRemoved(rootIntent);
+        try {
+            android.util.Log.i("mangjie", "任务被划掉，朗读服务保留");
+        } catch (Throwable ignored) {}
     }
 
     private void ensureChannel() {

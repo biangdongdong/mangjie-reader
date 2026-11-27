@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.mangjie.reader"
-    android:versionCode="525"
-    android:versionName="1.1.49">
+    android:versionCode="526"
+    android:versionName="1.1.50">
     <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="33" />
     <!-- 点明语音服务：Android 11+ 不声明这句，getPackageInfo 会被包可见性挡成 NameNotFound -->
     <queries>
@@ -16,6 +16,8 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 后台朗读不被冻结：申请电池优化豁免（小米/OPPO 等还要在系统里把省电策略设为无限制） -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
