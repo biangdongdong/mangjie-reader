@@ -732,6 +732,10 @@ public final class NetBookController {
         JSONObject src = nbSources.get(si);
         bindSrc(src);
         String sName = src.optString("bookSourceName", "源" + (si + 1));
+        // 1.1.51：计时打点。这条链路以前只记"共 N 个源"，没有一行耗时，慢在哪全靠猜
+        final long tAll0 = System.currentTimeMillis();
+        long tReq0 = 0, tReq1 = 0;
+        int respBytes = 0;
         probe: {
             if (!srcEnabled(src) && !nbChecking) break probe;
             String comment = src.optString("bookSourceComment", "");
@@ -747,7 +751,10 @@ public final class NetBookController {
                 jsPage = 1;
                 host.setJsPage(1);
                 // 搜索求快不求全：单源 8 秒，超时就当这个源没结果，别让它占着一个线程位几十秒
+                tReq0 = System.currentTimeMillis();
                 Http.Resp resp = reqR(sUrl, base, 8000);
+                tReq1 = System.currentTimeMillis();
+                if (resp != null && resp.body != null) respBytes = resp.body.length();
                 if (resp == null || resp.body == null || resp.body.trim().isEmpty()) break probe;
                 String html = resp.body;
                 String pageUrl = (resp.url == null || resp.url.trim().isEmpty()) ? absUrl(base, sUrl) : resp.url.trim();
@@ -810,6 +817,10 @@ public final class NetBookController {
                 host.log("听书", "搜索异常 源" + si + "：" + e.getMessage());
             }
         }
+        long tAll1 = System.currentTimeMillis();
+        host.log("搜索耗时", "源=" + sName + " 请求=" + (tReq1 > 0 ? (tReq1 - tReq0) + "ms" : "未发")
+                + " 解析=" + (tReq1 > 0 ? (tAll1 - tReq1) + "ms" : "-")
+                + " 合计=" + (tAll1 - tAll0) + "ms 条目=" + out.size() + " 字节=" + respBytes);
         return out;
     }
 
@@ -1115,6 +1126,11 @@ public final class NetBookController {
             return;
         }
         final int total = n;
+        // 1.1.51 计时：首屏从按下搜索算起；每源耗时单独收着，收尾打一条最慢 5 源
+        final long t0 = System.currentTimeMillis();
+        final long[] firstRowAt = new long[]{-1};
+        final java.util.concurrent.ConcurrentHashMap<String, Long> costMap =
+                new java.util.concurrent.ConcurrentHashMap<String, Long>();
         final java.util.concurrent.atomic.AtomicInteger done =
                 new java.util.concurrent.atomic.AtomicInteger();
         final long[] lastRender = new long[]{0};
@@ -1150,7 +1166,11 @@ public final class NetBookController {
                     int rest;
                     try {
                         if (seq != nbSearchSeq) return;   // 在队列里排到的时候已经过期，秒退，不占线程
+                        long tb = System.currentTimeMillis();
                         one = nbSearchInSource(fsi, key);
+                        String sname = rules.ruleStr(nbSources.get(fsi), "bookSourceName");
+                        costMap.put(sname == null || sname.trim().isEmpty() ? ("源" + fsi) : sname.trim(),
+                                System.currentTimeMillis() - tb);
                     } catch (Throwable t) {
                         // 以前这里是 Exception，抛 Throwable 的源连计数都加不上
                         host.log("搜索", "源 " + fsi + " 异常：" + t.getClass().getSimpleName()
@@ -1166,6 +1186,11 @@ public final class NetBookController {
                     ui.post(new Runnable() { @Override public void run() {
                         if (seq != nbSearchSeq) return;          // 已经有更新的一次搜索了
                         if (mine != nbResults) return;           // 结果容器被换掉了（换源、重新搜），这一路作废
+                        if (firstRowAt[0] < 0 && !fone.isEmpty()) {
+                            firstRowAt[0] = System.currentTimeMillis() - t0;
+                            host.log("搜索耗时", "首屏 " + firstRowAt[0] + "ms　这一源回来 "
+                                    + fone.size() + " 条");
+                        }
                         for (String[] b : fone) {
                             String bk = mergeKeyOf(b);
                             Integer at = bookAt.get(bk);
@@ -1217,6 +1242,10 @@ public final class NetBookController {
                             host.updateSearchRow(nbSecIdx, prog);
                         }
                         if (frest >= total) {
+                            host.log("搜索耗时", "收尾 合计 " + (System.currentTimeMillis() - t0)
+                                    + "ms　首屏 " + (firstRowAt[0] < 0 ? -1 : firstRowAt[0])
+                                    + "ms　源数 " + total + "　结果 " + nbResults.size());
+                            slowestFive(costMap);
                             nbSearchBusy = false;         // 这一轮收尾，菜单里不再露「停止搜索」
                             if (nbResults.isEmpty()) {
                                 host.appendSearchRow("（没搜到，换个书名或检查书源）", "", sc);
@@ -1257,8 +1286,31 @@ public final class NetBookController {
         for (int k0 = 0; k0 < first; k0++) pump[0].run();
     }
 
-    public int nbCountChapters(JSONObject src, String bookUrl) {
-        try {
+    /** 打点用：把最慢的 5 个源写成一条日志，收尾时一眼能看出是不是某几个源在拖 */
+    private void slowestFive(java.util.Map<String, Long> cost) {
+        if (cost == null || cost.isEmpty()) return;
+        String[] nm = new String[5];
+        long[] ms = new long[5];
+        for (java.util.Map.Entry<String, Long> e : cost.entrySet()) {
+            long v = e.getValue() == null ? 0 : e.getValue();
+            for (int i = 0; i < 5; i++) {
+                if (v > ms[i]) {
+                    for (int j = 4; j > i; j--) { ms[j] = ms[j - 1]; nm[j] = nm[j - 1]; }
+                    ms[i] = v; nm[i] = e.getKey();
+                    break;
+                }
+            }
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < 5; i++) {
+            if (nm[i] == null) break;
+            if (sb.length() > 0) sb.append("；");
+            sb.append(nm[i]).append(' ').append(ms[i]).append("ms");
+        }
+        host.log("搜索耗时", "最慢：" + sb);
+    }
+
+    public int nbCountChapters(JSONObject src, String bookUrl) {        try {
             String base = rules.ruleStr(src, "bookSourceUrl");
             JSONObject rc = rules.sub(src, "ruleToc");
             if (rc == null) rc = rules.sub(src, "ruleChapterList");
