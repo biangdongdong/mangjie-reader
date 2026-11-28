@@ -92,6 +92,12 @@ public final class Http {
     public Resp fetch(String spec, String base) { return fetch(spec, base, 0); }
 
     public Resp fetch(String spec, String base, int timeoutMs) {
+        // 1.1.52：整条重定向链共享一份预算。以前每跳都重新拿一个完整的 timeout，
+        // 跳两次就是两个 8 秒——搜索日志里单源 14020ms 就是这么出来的
+        return fetch0(spec, base, timeoutMs, timeoutMs > 0 ? System.currentTimeMillis() + timeoutMs : 0L);
+    }
+
+    private Resp fetch0(String spec, String base, int timeoutMs, long deadline) {
         final Resp out = new Resp();
         final long t0 = System.currentTimeMillis();
         UrlResolver.Out ro = UrlResolver.resolve(spec, base, ctxKey, ctxPage, new UrlResolver.Js() {
@@ -130,6 +136,15 @@ public final class Http {
             // 源里写了 timeout 就按源里来（夹在 1～60 秒，免得一个坏源把线程卡死）
             int effMs = timeoutMs > 0 ? timeoutMs
                     : (ro.timeout > 0 ? Math.max(1000, Math.min(ro.timeout, 60000)) : 0);
+            if (deadline > 0) {
+                long left = deadline - System.currentTimeMillis();
+                if (left <= 0) {
+                    out.err = "超时（重定向链用完预算）";
+                    out.ms = System.currentTimeMillis() - t0;
+                    return out;
+                }
+                effMs = effMs > 0 ? (int) Math.min(effMs, left) : (int) left;
+            }
             c.setConnectTimeout(effMs > 0 ? effMs : 15000);
             // 读超时不再翻倍：以前传 30 秒实际会等 60 秒，搜索里一个坏源就卡住两个线程位
             c.setReadTimeout(effMs > 0 ? effMs : 25000);
@@ -203,7 +218,8 @@ public final class Http {
                 String loc = c.getHeaderField("Location");
                 out.location = loc == null ? "" : loc;
                 if (loc != null && ro.followRedirects) {
-                    Resp rr = fetch(loc.startsWith("http") ? loc : new java.net.URL(new java.net.URL(url), loc).toString(), base, timeoutMs);
+                    // 递归也要带上同一个 deadline：整条链只在总预算里跑
+                    Resp rr = fetch0(loc.startsWith("http") ? loc : new java.net.URL(new java.net.URL(url), loc).toString(), base, timeoutMs, deadline);
                     rr.ms = System.currentTimeMillis() - t0;
                     return rr;
                 }

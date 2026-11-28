@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.mangjie.reader"
-    android:versionCode="527"
-    android:versionName="1.1.51">
+    android:versionCode="528"
+    android:versionName="1.1.52">
     <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="33" />
     <!-- 点明语音服务：Android 11+ 不声明这句，getPackageInfo 会被包可见性挡成 NameNotFound -->
     <queries>

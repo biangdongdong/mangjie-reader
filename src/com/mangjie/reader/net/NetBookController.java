@@ -1106,14 +1106,29 @@ public final class NetBookController {
     /** 当前搜索范围下能拿来搜的源有几个 */
     private int countSearchable() {
         int n = 0;
-        for (int si = 0; si < nbSources.size(); si++) if (srcSearchOk(si) && inSearchScope(si)) n++;
+        // 和实际投递口径保持一致：同一 bookSourceUrl 只算一个，否则播报"搜 129 个"而实际投 126 个
+        java.util.Set<String> seen = new java.util.HashSet<String>();
+        for (int si = 0; si < nbSources.size(); si++) {
+            if (!srcSearchOk(si) || !inSearchScope(si)) continue;
+            String u = rules.ruleStr(nbSources.get(si), "bookSourceUrl").trim();
+            if (!u.isEmpty() && !seen.add(u)) continue;
+            n++;
+        }
         return n;
     }
 
     /** 逐源搜，谁先回来谁先上屏（跟 Legado 的追加式列表一致） */
     private void nbSearchStream(final String key, final Screen sc, final List<Item> items, final int seq) {
         final List<Integer> use = new ArrayList<>();
-        for (int si = 0; si < nbSources.size(); si++) if (srcSearchOk(si) && inSearchScope(si)) use.add(si);
+        // 1.1.52：同一个 bookSourceUrl 只搜一次。日志里出现过同一源被搜三遍（得奇小说×3、快眼看书×2），
+        // 三次都打同一个站点，等于自己给自己限速
+        final java.util.Set<String> seenUrl = new java.util.HashSet<String>();
+        for (int si = 0; si < nbSources.size(); si++) {
+            if (!srcSearchOk(si) || !inSearchScope(si)) continue;
+            String su = rules.ruleStr(nbSources.get(si), "bookSourceUrl").trim();
+            if (!su.isEmpty() && !seenUrl.add(su)) continue;
+            use.add(si);
+        }
         final int n = use.size();
         nbHitCount = 0;           // 新一轮，命中区重新算
         int want = prefs.getInt("searchThreads", 16);
@@ -1137,8 +1152,10 @@ public final class NetBookController {
         // 同名同作者的多源合成一条（对齐 Legado 的 mergeItems），来源累积到第 4 栏
         final java.util.Map<String, Integer> bookAt = new java.util.HashMap<String, Integer>();
         // 按「同时搜几个源」分批投：先投 want 个，回来一个再投下一个，设置里改的数字真的生效
-        final java.util.concurrent.atomic.AtomicInteger cursor =
-                new java.util.concurrent.atomic.AtomicInteger();
+        // 1.1.52：改成待发队列 + 同域名在途上限，避免同一个站点多个源同时打过去被限速
+        final java.util.LinkedList<Integer> queue = new java.util.LinkedList<Integer>();
+        for (int i = 0; i < n; i++) queue.add(use.get(i));
+        final java.util.Map<String, Integer> hostBusy = new java.util.HashMap<String, Integer>();
         // 每轮自己的池，大小就是设置的并发数。以前所有轮共用一个写死 4 线程的 static 池，
         // 连点几十次搜索就往无界队列里堆了几千个旧任务，当前这轮排在他们后面出不来
         final java.util.concurrent.ExecutorService pool =
@@ -1157,9 +1174,28 @@ public final class NetBookController {
         final Runnable[] pump = new Runnable[1];
         pump[0] = new Runnable() { @Override public void run() {
             if (seq != nbSearchSeq) return;          // 这轮已经被新搜索顶掉，别再往下投
-            int next = cursor.getAndIncrement();
-            if (next >= n) return;
-            final int fsi = use.get(next);
+            int got = -1;
+            synchronized (queue) {
+                int scan = 0;
+                int qn = queue.size();
+                // 轮转找第一个「同域在途还没到 2 个」的源；全被限住就先返回，等某个回来再投
+                while (scan < qn && !queue.isEmpty()) {
+                    Integer cand = queue.pollFirst();
+                    if (cand == null) break;
+                    String hk = hostKeyOf(cand);
+                    Integer c = hostBusy.get(hk);
+                    if (c != null && c >= 2) {
+                        queue.addLast(cand);         // 放回队尾，等这个域名空出坑
+                        scan++;
+                        continue;
+                    }
+                    hostBusy.put(hk, (c == null ? 0 : c) + 1);
+                    got = cand;
+                    break;
+                }
+            }
+            if (got < 0) return;
+            final int fsi = got;
             try {
                 pool.submit(new Runnable() { @Override public void run() {
                     List<String[]> one = new ArrayList<String[]>();
@@ -1179,6 +1215,12 @@ public final class NetBookController {
                         // 计数必须无条件加：以前只在正常返回后加，异常源算不进来，
                         // 收尾条件 rest>=total 永远凑不满，排序和「共 N 本」一次都没跑过
                         rest = done.incrementAndGet();
+                        // 1.1.52：这个域名的在途名额无条件归还，否则同域计数只增不减，后面的源永远投不出去
+                        synchronized (queue) {
+                            String hk = hostKeyOf(fsi);
+                            Integer c = hostBusy.get(hk);
+                            if (c != null && c > 0) hostBusy.put(hk, c - 1);
+                        }
                     }
                     final List<String[]> fone = one;
                     final int frest = rest;
@@ -1284,6 +1326,22 @@ public final class NetBookController {
         } };
         int first = Math.min(want, n);
         for (int k0 = 0; k0 < first; k0++) pump[0].run();
+    }
+
+    /** 源网址的域名，用来限制同域并发（取书源 JSON 的 bookSourceUrl，不是搜索地址） */
+    private String hostKeyOf(int si) {
+        try {
+            String u = rules.ruleStr(nbSources.get(si), "bookSourceUrl");
+            if (u == null) return "";
+            u = u.trim();
+            int p = u.indexOf("://");
+            String h = p >= 0 ? u.substring(p + 3) : u;
+            int s = h.indexOf('/');
+            if (s >= 0) h = h.substring(0, s);
+            return h.toLowerCase(java.util.Locale.ROOT);
+        } catch (Throwable t) {
+            return "";
+        }
     }
 
     /** 打点用：把最慢的 5 个源写成一条日志，收尾时一眼能看出是不是某几个源在拖 */
